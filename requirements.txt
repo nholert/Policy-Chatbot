@@ -1,0 +1,7 @@
+llama-index
+faiss-cpu
+openai
+pdfplumber
+streamlit
+flask
+gunicorn
