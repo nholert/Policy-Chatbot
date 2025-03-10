@@ -1,54 +1,39 @@
-from flask import Flask, request, jsonify, render_template_string
-from llama_index.core import StorageContext, load_index_from_storage
-from llama_index.core.query_engine import RetrieverQueryEngine
+from flask import Flask, request, jsonify, render_template
+import openai
 import os
+from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, StorageContext, load_index_from_storage
 
 app = Flask(__name__)
 
-# Load the stored index
-storage_context = StorageContext.from_defaults(persist_dir="policy_index")
-index = load_index_from_storage(storage_context)
+# Load or create the index from private submodule documents
+DATA_DIR = "policy_documents"
+INDEX_DIR = "policy_index"
 
-# Set up the query engine
-retriever = index.as_retriever(similarity_top_k=3)
-query_engine = RetrieverQueryEngine(retriever)
+# Check if the index already exists
+if os.path.exists(INDEX_DIR):
+    storage_context = StorageContext.from_defaults(persist_dir=INDEX_DIR)
+    index = load_index_from_storage(storage_context)
+else:
+    documents = SimpleDirectoryReader(DATA_DIR).load_data()
+    index = VectorStoreIndex.from_documents(documents)
+    index.storage_context.persist(persist_dir=INDEX_DIR)
 
-def ask_policy_bot(question):
-    """Retrieve policy information based on a user's question."""
-    response = query_engine.query(question)
-    return response.response
+query_engine = index.as_query_engine()
 
-@app.route("/", methods=["GET", "POST"])
+# Homepage
+@app.route("/")
 def home():
-    """Simple HTML interface for asking questions."""
-    if request.method == "POST":
-        question = request.form["question"]
-        answer = ask_policy_bot(question)
-        return render_template_string("""
-            <h2>Answer:</h2>
-            <p>{{ answer }}</p>
-            <a href='/'>Ask another question</a>
-        """, answer=answer)
+    return render_template("index.html")
 
-    return render_template_string("""
-        <form method="post">
-            <label>Ask a question about college policies:</label><br>
-            <input type="text" name="question" required><br><br>
-            <input type="submit" value="Ask">
-        </form>
-    """)
-
-@app.route("/ask", methods=["POST"])
-def ask():
-    """API endpoint for asking questions."""
-    data = request.get_json()
-    question = data.get("question", "")
-    
-    if not question:
+# API to handle user queries
+@app.route("/chat", methods=["POST"])
+def chat():
+    user_input = request.json.get("question")
+    if not user_input:
         return jsonify({"error": "No question provided"}), 400
 
-    answer = ask_policy_bot(question)
-    return jsonify({"question": question, "answer": answer})
+    response = query_engine.query(user_input)
+    return jsonify({"answer": response.response})
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(debug=True)
