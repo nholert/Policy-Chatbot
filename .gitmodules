@@ -1,4 +1,4 @@
 [submodule "policy_documents"]
 	path = policy_documents
-	url = https://github.com/nholert/Policy-Chatbot.git
+	url = https://github.com/nholert/Chatbot-Documents.git
 	branch = main
